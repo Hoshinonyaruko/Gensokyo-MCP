@@ -8,6 +8,7 @@ config.yml
 # Go specific
 gensokyo.exe
 gsk.exe
+mcp.exe
 
 # Ignore channel_temp
 channel_temp/

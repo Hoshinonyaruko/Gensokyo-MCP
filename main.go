@@ -105,7 +105,7 @@ func (g *GensokyoServer) ServeStdio() error {
 	)
 }
 
-// ---------- main ----------
+// ---------- main -----------
 
 func main() {
 	transport := flag.String("t", "http", "Transport: http | stdio")
