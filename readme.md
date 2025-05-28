@@ -117,10 +117,10 @@ _✨ 基于 [OneBot](https://github.com/howmanybots/onebot/blob/master/README.md
 
 <div align="center">
 
-<img src="images/example1.png" alt="效果图1" width="60%" />
+<img src="images/example1.png" alt="效果图" width="60%" />
 <p>示例1：修仙插件界面</p>
 
-<img src="images/example2.png" alt="效果图2" width="60%" />
+<img src="images/example2.png" alt="效果图" width="60%" />
 <p>示例2：效果</p>
 
 * 任何onebotv11的插件类型,比如天气\游戏查询\娱乐均可作为MCP Server使用. 即刻将数千个Onebotv11生态插件转化为ai工具
