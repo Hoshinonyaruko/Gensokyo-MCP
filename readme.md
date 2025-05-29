@@ -109,6 +109,10 @@ _✨ 基于 [OneBot](https://github.com/howmanybots/onebot/blob/master/README.md
 * 支持本地连接（如示例所示），也支持远程连接，只需将 `url` 换为对应地址即可。
 * 其他 MCP 客户端的连接方式，可直接复制 cline 的配置模板，修改参数后使用。如有疑问，欢迎将配置发送至交流群，或询问 AI 获取针对性帮助。
 
+## 教程索引
+
+> [💙 Windows 端 VSCode-Cline + gensokyo-mcp 早苗接入完整教程](./doc/sanae.md)
+
 **常见问题**
 如遇到连接异常或配置相关问题，请加入交流群 196173384 进行反馈，我们将协助你快速解决。
 
