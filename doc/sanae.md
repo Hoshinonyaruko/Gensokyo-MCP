@@ -17,7 +17,7 @@
    - Windows 操作系统
 
 2. **下载工具**  
-   - 前往 [发布页]()（你可以自行补充下载地址）下载 `gensokyo-mcp.exe` 可执行文件。
+   - 前往 [发布页](https://github.com/Hoshinonyaruko/Gensokyo-MCP/releases)下载 `gensokyo-mcp.exe` 可执行文件。
 
 ---
 
@@ -79,7 +79,7 @@
 
 ### 2. 早苗的功能
 
-![早苗说明书](https://www.yuque.com/km57bt/hlhnxg)
+<a href="https://www.yuque.com/km57bt/hlhnxg">早苗说明书</a>
 
 点击功能图解打开,
 
