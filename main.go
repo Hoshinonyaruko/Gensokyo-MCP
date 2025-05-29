@@ -4,10 +4,12 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -367,45 +369,69 @@ func callWS(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, 
 		// 如果不是string，调用parseMessage函数处理
 		strmessage = praser.ParseMessageContent(message.Params.Message, false)
 	}
+
 	// 调用信息处理函数
-	_, result, err := ProcessMessage(strmessage, message)
+	messageType, resultText, resultImg, err := ProcessMessage(strmessage, message)
 	if err != nil {
 		// 处理错误情况
 		resp = "处理错误"
 		return mcp.NewToolResultText(resp), nil
 	}
 
-	var pendingMsgsToReturn []callapi.ActionMessage
-	if resultStr, ok := result.(string); ok {
-		// 获取并叠加历史信息，传入当前字数（这里假设当前字数为0）
-		pendingMsgsToReturn, _, err = wsclient.GetPendingMessages(args.UserID, true, len(resultStr))
+	// 根据信息处理函数的返回类型决定如何回复
+	switch messageType {
+	case 1: // 纯文本信息
+		var pendingMsgsToReturn []callapi.ActionMessage
+		if resultStr, ok := resultText.(string); ok {
+			// 获取并叠加历史信息，传入当前字数（这里假设当前字数为0）
+			pendingMsgsToReturn, _, err = wsclient.GetPendingMessages(args.UserID, true, len(resultStr))
+			if err != nil {
+				log.Printf("Error getting pending messages: %v", err)
+				// 如果无法获取历史消息，就直接处理当前的消息
+				pendingMsgsToReturn = nil
+			}
+		}
+
+		// 遍历所有历史消息，并叠加到 result 前
+		for _, message := range pendingMsgsToReturn {
+			var historyContent string
+			// 处理历史消息内容
+			if msgStr, ok := message.Params.Message.(string); ok {
+				historyContent = msgStr
+			} else {
+				// 如果不是string类型，调用parseMessage函数处理
+				historyContent = praser.ParseMessageContent(message.Params.Message, true)
+			}
+
+			// 将历史信息叠加到当前的 result 前
+			resultText = fmt.Sprintf("%s\n-----历史信息----\n%s", historyContent, resultText)
+		}
+		return mcp.NewToolResultText(resultText.(string)), nil
+	case 2: // 纯图片信息
+		imgBase64, err := ImageURLToBase64(resultImg.(string))
 		if err != nil {
-			log.Printf("Error getting pending messages: %v", err)
-			// 如果无法获取历史消息，就直接处理当前的消息
-			pendingMsgsToReturn = nil
+			return nil, err
 		}
-	}
+		return mcp.NewToolResultImage(resultText.(string), imgBase64, "image/jpeg"), nil
 
-	// 遍历所有历史消息，并叠加到 result 前
-	for _, message := range pendingMsgsToReturn {
-		var historyContent string
-		// 处理历史消息内容
-		if msgStr, ok := message.Params.Message.(string); ok {
-			historyContent = msgStr
-		} else {
-			// 如果不是string类型，调用parseMessage函数处理
-			historyContent = praser.ParseMessageContent(message.Params.Message, true)
+	case 4: // 图文信息
+		imgBase64, err := ImageURLToBase64(resultImg.(string))
+		if err != nil {
+			return nil, err
 		}
-
-		// 将历史信息叠加到当前的 result 前
-		result = fmt.Sprintf("%s\n-----历史信息----\n%s", historyContent, result)
+		return mcp.NewToolResultImage(resultText.(string), imgBase64, "image/jpeg"), nil
+	// 	case 2: // 纯图片信息
+	// 	return NewToolResultTwoTexts(resultText.(string), resultImg.(string)), nil
+	// case 4: // 图文信息
+	// 	return NewToolResultTwoTexts(resultText.(string), resultImg.(string)), nil
+	default:
+		return mcp.NewToolResultText("未知类型信息"), nil
 	}
-
-	return mcp.NewToolResultText(result.(string)), nil
+	//return mcp.NewToolResultText("无返回值"), nil
 }
 
 // ProcessMessage 处理信息并归类
-func ProcessMessage(input string, rawMsg *callapi.ActionMessage) (int, interface{}, error) {
+func ProcessMessage(input string, rawMsg *callapi.ActionMessage) (int, interface{}, interface{}, error) {
 	// 正则表达式定义
 	httpUrlImagePattern := regexp.MustCompile(`\[CQ:image,file=http://(.+?)\]`)
 	httpsUrlImagePattern := regexp.MustCompile(`\[CQ:image,file=https://(.+?)\]`)
@@ -432,7 +458,7 @@ func ProcessMessage(input string, rawMsg *callapi.ActionMessage) (int, interface
 		filteredInput := cqAtPattern.ReplaceAllString(input, "")
 
 		// 返回过滤后的纯文本信息
-		return 1, filteredInput, nil
+		return 1, filteredInput, nil, nil
 	}
 
 	// 图片信息处理
@@ -456,20 +482,15 @@ func ProcessMessage(input string, rawMsg *callapi.ActionMessage) (int, interface
 
 		// 如果替换后内容为空 且只有一个图片
 		if len(imageUrls) == 1 && input == "" {
-			// TODO: 待研究
-			mediaId := 1
-			return 2, mediaId, nil // 纯图片信息
+			imgUrl := imageUrls[0]
+			return 2, "", imgUrl, nil // 纯图片信息
 		} else {
-
-			// 单图片信息
-			mediaId := 0
-
-			//fmt.Printf("这里的mediaID:%s", mediaId)
+			// 图片信息+文本
+			imgUrl := imageUrls[0]
 
 			// 将文字部分加入到堆积的事件中
 			//wsclient.AddMessageToPending(rawMsg.Params.UserID.(string), rawMsg)
-			return 2, mediaId, nil // 纯图片信息
-			//return 4, news, nil // 图文信息
+			return 2, input, imgUrl, nil // 图文信息
 		}
 	}
 
@@ -495,12 +516,12 @@ func ProcessMessage(input string, rawMsg *callapi.ActionMessage) (int, interface
 		// 如果找到了语音URL
 		if recordUrl != "" {
 			mediaId := 0
-			return 3, mediaId, nil // 纯语音信息
+			return 3, mediaId, nil, nil // 纯语音信息
 		}
 	}
 
 	// 如果没有匹配到任何已知格式，返回错误
-	return 0, nil, errors.New("unknown message format")
+	return 0, nil, nil, errors.New("unknown message format")
 }
 
 // processInput 处理含有Base64编码的图片和语音信息的字符串
@@ -517,4 +538,40 @@ func PrintCallToolRequestAsJSON(req mcp.CallToolRequest) error {
 	}
 	fmt.Println(string(data))
 	return nil
+}
+
+// NewToolResultTwoTexts creates a new CallToolResult with two text content elements
+func NewToolResultTwoTexts(text1, text2 string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			mcp.TextContent{
+				Type: "text",
+				Text: text1,
+			},
+			mcp.TextContent{
+				Type: "text",
+				Text: text2,
+			},
+		},
+	}
+}
+
+// ImageURLToBase64 downloads an image from a URL and returns its base64 encoding as a string
+func ImageURLToBase64(url string) (string, error) {
+	// 1. 发起 GET 请求
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	// 2. 读取所有内容到内存
+	imgData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// 3. base64 编码
+	base64Str := base64.StdEncoding.EncodeToString(imgData)
+	return base64Str, nil
 }

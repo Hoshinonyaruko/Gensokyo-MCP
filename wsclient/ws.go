@@ -251,10 +251,10 @@ func (client *WebSocketClient) recvMessage(msg []byte) {
 
 	var echoKey string
 	if !config.GetStringOb11() {
-		//echoKey, _ = idmap.RetrieveRowByIDv2(message.Params.UserID.(string))
+		echoKey = message.Params.UserID.(string)
 	} else {
 		// 如果双向Echo启用，根据echo的值处理消息
-		echoKey, _ = message.Params.UserID.(string)
+		echoKey = message.Params.UserID.(string)
 	}
 
 	if ch, ok := echoToChanMap[echoKey]; ok {
@@ -655,4 +655,17 @@ func GetPendingMessages(userid string, clear bool, currentLength int) ([]callapi
 
 	// 返回叠加的历史消息和当前总字数
 	return pendingMsgsToReturn, totalLength, nil
+}
+
+// AddMessageToPending 向指定 echoKey 对应的 pendingMessages 中添加一条消息
+func AddMessageToPending(echoKey string, message *callapi.ActionMessage) {
+	// 锁定 pendingMessages 保证并发安全
+	pendingMutex.Lock()
+	defer pendingMutex.Unlock()
+
+	// 将消息添加到对应的 echoKey 的 pendingMessages 中
+	pendingMessages[echoKey] = append(pendingMessages[echoKey], *message)
+
+	// 打印日志，确保信息已被添加
+	mylog.Printf("Added message to pendingMessages for echoKey '%s'. Current queue length: %d", echoKey, len(pendingMessages[echoKey]))
 }
